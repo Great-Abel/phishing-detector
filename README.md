@@ -8,6 +8,7 @@ Aplikasi menerima input URL dari pengguna, mengekstraksi fitur dari URL tersebut
 
 1. [Ismatul Ilmi] — [247006111137]
 2. [Nabila Rohmatul Aulia] — [247006111143]
+3. [Refa Adinda Putri] — [247006111197]
 
 ## 🎯 Tujuan Proyek
 
