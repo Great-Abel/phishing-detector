@@ -96,6 +96,18 @@ def logout() -> None:
     clear_session()
 
 
+def reset_password(email: str) -> tuple[bool, str]:
+    """Kirim email reset password via Supabase Auth."""
+    email = email.strip().lower()
+    if not email:
+        return False, "Email tidak boleh kosong."
+    try:
+        get_client().auth.reset_password_for_email(email)
+        return True, "Link reset password telah dikirim ke email kamu."
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
 # ── Helper ─────────────────────────────────────────────────────────────────────
 
 def _fail_message(sisa_coba: int) -> str:

@@ -1,5 +1,5 @@
 import streamlit as st
-from services.auth_service import login, register
+from services.auth_service import login, register, reset_password
 
 
 def show_auth_page() -> None:
@@ -13,31 +13,40 @@ def show_auth_page() -> None:
     if "auth_page" not in st.session_state:
         st.session_state["auth_page"] = "login"
 
-    col_login, col_register = st.columns(2)
-    with col_login:
+    col1, col2, col3 = st.columns(3)
+    with col1:
         if st.button(
             "🔑 Login", use_container_width=True,
             type="primary" if st.session_state["auth_page"] == "login" else "secondary",
         ):
             st.session_state["auth_page"] = "login"
             st.rerun()
-    with col_register:
+    with col2:
         if st.button(
             "📝 Register", use_container_width=True,
             type="primary" if st.session_state["auth_page"] == "register" else "secondary",
         ):
             st.session_state["auth_page"] = "register"
             st.rerun()
+    with col3:
+        if st.button(
+            "🔓 Lupa Password", use_container_width=True,
+            type="primary" if st.session_state["auth_page"] == "forgot" else "secondary",
+        ):
+            st.session_state["auth_page"] = "forgot"
+            st.rerun()
 
     st.divider()
 
     if st.session_state["auth_page"] == "login":
         _login_form()
-    else:
+    elif st.session_state["auth_page"] == "register":
         _register_form()
+    else:
+        _forgot_form()
 
 
-# ── Forms ──────────────────────────────────────────────────────────���───────────
+# ── Forms ──────────────────────────────────────────────────────────────────────
 
 def _login_form() -> None:
     st.subheader("Login")
@@ -83,5 +92,26 @@ def _register_form() -> None:
             st.info("Silakan login setelah mengkonfirmasi email kamu.")
             st.session_state["auth_page"] = "login"
             st.rerun()
+        else:
+            st.error(msg)
+
+
+def _forgot_form() -> None:
+    st.subheader("Lupa Password")
+    st.caption("Masukkan email akunmu. Kami akan kirimkan link untuk reset password.")
+
+    with st.form("form_forgot", clear_on_submit=True):
+        email     = st.text_input("Email", placeholder="email@contoh.com")
+        submitted = st.form_submit_button("Kirim Link Reset", use_container_width=True, type="primary")
+
+    if submitted:
+        if not email:
+            st.warning("Masukkan email terlebih dahulu.")
+            return
+        with st.spinner("Mengirim email..."):
+            ok, msg = reset_password(email)
+        if ok:
+            st.success(msg)
+            st.info("Cek inbox atau folder spam kamu. Link berlaku selama 1 jam.")
         else:
             st.error(msg)
