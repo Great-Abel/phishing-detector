@@ -29,6 +29,9 @@ RATE_LIMIT_COOLDOWN_SECS: int = 60   # kunci email (detik)
 RATE_LIMIT_IP_MAX_ATTEMPTS: int  = 20   # maks gagal per IP (lebih longgar)
 RATE_LIMIT_IP_COOLDOWN_SECS: int = 900  # kunci IP 15 menit
 
+# ── Validasi password ──────────────────────────────────────────────────────────
+MIN_PASSWORD_LENGTH: int = 8
+
 
 def validate_config() -> list[str]:
     """
