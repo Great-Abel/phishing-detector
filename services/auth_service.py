@@ -97,12 +97,15 @@ def logout() -> None:
 
 
 def reset_password(email: str) -> tuple[bool, str]:
-    """Kirim email reset password via Supabase Auth."""
+    """Kirim email reset password via Supabase Auth. Link mengarah ke Vercel redirect page."""
     email = email.strip().lower()
     if not email:
         return False, "Email tidak boleh kosong."
     try:
-        get_client().auth.reset_password_for_email(email)
+        get_client().auth.reset_password_for_email(
+            email,
+            options={"redirect_to": "https://phishing-reset.vercel.app"}
+        )
         return True, "Link reset password telah dikirim ke email kamu."
     except Exception as e:
         return False, f"Error: {e}"
