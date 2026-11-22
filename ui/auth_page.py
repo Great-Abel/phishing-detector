@@ -1,5 +1,6 @@
 import streamlit as st
-from services.auth_service import login, register, is_login_locked, remaining_attempts
+from services.auth_service import login, register
+from services.rate_limiter import is_locked, remaining_attempts
 
 
 def show_auth_page() -> None:
@@ -42,17 +43,6 @@ def show_auth_page() -> None:
 def _login_form() -> None:
     st.subheader("Login")
 
-    # Tampilkan status rate limit
-    locked, sisa = is_login_locked()
-    if locked:
-        st.error(f"🔒 Akun dikunci sementara. Coba lagi dalam **{sisa} detik**.")
-        st.info("Terlalu banyak percobaan login gagal.")
-        return
-
-    sisa_coba = remaining_attempts()
-    if sisa_coba < 5:
-        st.warning(f"⚠️ Sisa percobaan login: **{sisa_coba}x** sebelum dikunci 60 detik.")
-
     with st.form("form_login", clear_on_submit=False):
         email    = st.text_input("Email", placeholder="email@contoh.com")
         password = st.text_input("Password", type="password", placeholder="••••••••")
@@ -62,6 +52,20 @@ def _login_form() -> None:
         if not email or not password:
             st.warning("Email dan password tidak boleh kosong.")
             return
+
+        clean_email = email.strip().lower()
+
+        # Cek lock setelah email diisi
+        locked, sisa = is_locked(clean_email)
+        if locked:
+            st.error(f"🔒 Akun dikunci sementara. Coba lagi dalam **{sisa} detik**.")
+            return
+
+        # Tampilkan sisa percobaan kalau sudah pernah gagal
+        sisa_coba = remaining_attempts(clean_email)
+        if sisa_coba < 5:
+            st.warning(f"⚠️ Sisa percobaan: **{sisa_coba}x** sebelum dikunci 60 detik.")
+
         with st.spinner("Memverifikasi..."):
             ok, msg = login(email, password)
         if ok:

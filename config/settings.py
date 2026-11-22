@@ -17,8 +17,14 @@ AUDIT_TRAIL_LIMIT: int = 50
 # ── Timezone offset WIB (UTC+7) ────────────────────────────────────────────────
 WIB_OFFSET_HOURS: int = 7
 
-# ── Validasi ───────────────────────────────────────────────────────────────────
-MIN_PASSWORD_LENGTH: int = 8
+# ── Upstash Redis ──────────────────────────────────────────────────────────────
+UPSTASH_REDIS_URL: str   = os.getenv("UPSTASH_REDIS_URL", "")
+UPSTASH_REDIS_TOKEN: str = os.getenv("UPSTASH_REDIS_TOKEN", "")
+
+# ── Rate Limiter ───────────────────────────────────────────────────────────────
+RATE_LIMIT_MAX_ATTEMPTS: int  = 5   # maks percobaan gagal
+RATE_LIMIT_WINDOW_SECS: int   = 60  # window tracking (detik)
+RATE_LIMIT_COOLDOWN_SECS: int = 60  # durasi kunci setelah maks tercapai
 
 
 def validate_config() -> list[str]:
