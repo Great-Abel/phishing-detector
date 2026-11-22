@@ -1,9 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
-from config.settings import (
-    SUPABASE_URL, SUPABASE_ANON_KEY,
-    MIN_PASSWORD_LENGTH, validate_config,
-)
+from config.settings import SUPABASE_URL, SUPABASE_ANON_KEY, MIN_PASSWORD_LENGTH, validate_config
+from services import rate_limiter
 
 
 # ── Supabase client ────────────────────────────────────────────────────────────
@@ -36,7 +34,7 @@ def clear_session() -> None:
     st.session_state["auth_page"] = "login"
 
 
-# ── Auth actions ───────────────────────────────────────────────────────────────
+# ── Auth ───────────────────────────────────────────────────────────────────────
 
 def register(email: str, password: str) -> tuple[bool, str]:
     email = email.strip().lower()
@@ -45,8 +43,8 @@ def register(email: str, password: str) -> tuple[bool, str]:
         return False, f"Password minimal {MIN_PASSWORD_LENGTH} karakter."
 
     try:
-        response = get_client().auth.sign_up({"email": email, "password": password})
-        if response.user:
+        res = get_client().auth.sign_up({"email": email, "password": password})
+        if res.user:
             return True, "Registrasi berhasil! Cek email untuk konfirmasi akun."
         return False, "Registrasi gagal. Coba lagi."
     except Exception as e:
@@ -59,18 +57,34 @@ def register(email: str, password: str) -> tuple[bool, str]:
 def login(email: str, password: str) -> tuple[bool, str]:
     email = email.strip().lower()
 
+    # 1. Cek apakah sedang dikunci
+    locked, sisa = rate_limiter.is_locked(email)
+    if locked:
+        return False, f"🔒 Akun dikunci. Coba lagi dalam {sisa} detik."
+
+    # 2. Proses login
     try:
-        response = get_client().auth.sign_in_with_password({"email": email, "password": password})
-        if response.user:
-            _set_session(response.user)
-            return True, f"Selamat datang, {response.user.email}!"
-        return False, "Login gagal. Periksa email dan password kamu."
+        res = get_client().auth.sign_in_with_password({"email": email, "password": password})
+
+        if res.user:
+            rate_limiter.reset(email)
+            _set_session(res.user)
+            return True, f"Selamat datang, {res.user.email}!"
+
+        # Gagal tanpa exception
+        sisa_coba = rate_limiter.record_fail(email)
+        return False, _fail_message(sisa_coba)
+
     except Exception as e:
         msg = str(e).lower()
+
         if "invalid login credentials" in msg:
-            return False, "Email atau password salah."
+            sisa_coba = rate_limiter.record_fail(email)
+            return False, _fail_message(sisa_coba)
+
         if "email not confirmed" in msg:
             return False, "Email belum dikonfirmasi. Cek inbox kamu."
+
         return False, f"Error: {e}"
 
 
@@ -80,3 +94,14 @@ def logout() -> None:
     except Exception:
         pass
     clear_session()
+
+
+# ── Helper ─────────────────────────────────────────────────────────────────────
+
+def _fail_message(sisa_coba: int) -> str:
+    """Satu pesan konsisten berdasarkan sisa percobaan."""
+    if sisa_coba == 0:
+        return f"🔒 Terlalu banyak percobaan. Akun dikunci {rate_limiter.COOLDOWN_SECS} detik."
+    if sisa_coba == 1:
+        return f"Email atau password salah. ⚠️ Sisa {sisa_coba} percobaan terakhir!"
+    return f"Email atau password salah. Sisa {sisa_coba} percobaan."
