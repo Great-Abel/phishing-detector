@@ -121,7 +121,6 @@ def _login_form() -> None:
         else:
             st.error(msg)
 
-
 def _register_form() -> None:
     st.subheader("Buat Akun Baru")
     with st.form("form_register", clear_on_submit=True):

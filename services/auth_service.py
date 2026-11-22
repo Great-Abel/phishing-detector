@@ -104,9 +104,16 @@ def login(email: str, password: str, ip: str = "unknown") -> tuple[bool, str]:
             rate_limiter.record_failed_email(email)
             rate_limiter.record_failed_ip(ip)
             sisa_coba = rate_limiter.remaining_attempts(email)
-            if sisa_coba > 0:
-                return False, f"Email atau password salah. Sisa percobaan: {sisa_coba}x"
-            return False, f"🔒 Akun dikunci 60 detik karena terlalu banyak percobaan."
+            if sisa_coba == 0:
+                return False, "🔒 Akun dikunci 60 detik karena terlalu banyak percobaan."
+            peringatan = {
+                4: "Sisa **4 percobaan** lagi.",
+                3: "Sisa **3 percobaan** lagi.",
+                2: "Hanya tersisa **2 percobaan** lagi, hati-hati.",
+                1: "Ini percobaan **terakhirmu** sebelum akun dikunci 60 detik!",
+            }
+            keterangan = peringatan.get(sisa_coba, "")
+            return False, f"Email atau password salah. {keterangan}"
         if "email not confirmed" in msg:
             return False, "Email belum dikonfirmasi. Cek inbox kamu."
         rate_limiter.record_failed_email(email)
