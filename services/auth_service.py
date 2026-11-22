@@ -104,7 +104,7 @@ def reset_password(email: str) -> tuple[bool, str]:
     try:
         get_client().auth.reset_password_for_email(
             email,
-            options={"redirect_to": "https://ismatul724.github.io/phishing-detector/vercel-redirect/"}
+            options={"redirect_to": "https://project-kuliah.me"}
         )
         return True, "Link reset password telah dikirim ke email kamu."
     except Exception as e:
