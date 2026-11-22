@@ -104,7 +104,7 @@ def reset_password(email: str) -> tuple[bool, str]:
     try:
         get_client().auth.reset_password_for_email(
             email,
-            options={"redirect_to": "https://project-kuliah.me"}
+            options={"redirect_to": "https://great-abel.github.io/phishing-detector/"}
         )
         return True, "Link reset password telah dikirim ke email kamu."
     except Exception as e:
