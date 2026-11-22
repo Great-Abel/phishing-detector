@@ -34,11 +34,10 @@ def save_audit(result: PredictionResult) -> tuple[bool, str]:
 
 def get_audit_trail(limit: int = AUDIT_TRAIL_LIMIT) -> list[dict]:
     """
-    Ambil riwayat scan milik user yang sedang login.
+    Ambil semua riwayat scan dari seluruh user (global audit trail).
     Diurutkan dari yang terbaru.
     """
-    user = get_current_user()
-    if not user:
+    if not get_current_user():
         return []
 
     try:
@@ -46,7 +45,6 @@ def get_audit_trail(limit: int = AUDIT_TRAIL_LIMIT) -> list[dict]:
             get_client()
             .table(AUDIT_TRAIL_TABLE)
             .select("user_email, url, prediction, phishing_pct, legit_pct, scanned_at")
-            .eq("user_id", user.id)
             .order("scanned_at", desc=True)
             .limit(limit)
             .execute()
