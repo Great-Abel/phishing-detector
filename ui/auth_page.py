@@ -49,17 +49,35 @@ def _login_form() -> None:
         password  = st.text_input("Password", type="password", placeholder="••••••••")
         submitted = st.form_submit_button("Login", use_container_width=True, type="primary")
 
-    # Link lupa password di kanan bawah form
+    # Link "Lupa Password?" — teks italic biru underline di kanan bawah
     _, col_link = st.columns([3, 1])
     with col_link:
-        if st.button(
-            "Lupa Password?",
-            key="btn_forgot",
-            use_container_width=True,
-            type="secondary",
-        ):
-            st.session_state["auth_page"] = "forgot"
-            st.rerun()
+        st.markdown("""
+<style>
+.link-forgot {
+    display: block;
+    text-align: right;
+    color: #4a9eff;
+    font-style: italic;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 4px;
+}
+.link-forgot:hover { color: #1a7de0; }
+</style>
+<a class="link-forgot" href="?auth=forgot" target="_self">Lupa Password?</a>
+""", unsafe_allow_html=True)
+
+    # Tangkap klik via query params
+    params = st.query_params
+    if params.get("auth") == "forgot":
+        st.query_params.clear()
+        st.session_state["auth_page"] = "forgot"
+        st.rerun()
 
     # CSS: warnai tombol lupa password jadi merah kecil
     st.markdown("""
