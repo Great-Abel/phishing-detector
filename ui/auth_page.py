@@ -79,33 +79,6 @@ def _login_form() -> None:
         st.session_state["auth_page"] = "forgot"
         st.rerun()
 
-    # CSS: warnai tombol lupa password jadi merah kecil
-    st.markdown("""
-<style>
-div[data-testid="stButton"]:has(button[kind="secondary"]#btn_forgot) button,
-button[kind="secondary"][data-testid="baseButton-secondary"] {
-    all: unset;
-}
-/* Target tombol Lupa Password? via key */
-div[data-testid="column"]:last-child .stButton button {
-    background: transparent !important;
-    color: #ff4b4b !important;
-    border: none !important;
-    font-size: 0.82rem !important;
-    padding: 0 !important;
-    text-decoration: underline !important;
-    cursor: pointer !important;
-    box-shadow: none !important;
-    width: auto !important;
-    min-height: unset !important;
-}
-div[data-testid="column"]:last-child .stButton button:hover {
-    color: #ff2222 !important;
-    background: transparent !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
     if submitted:
         if not email or not password:
             st.warning("Email dan password tidak boleh kosong.")

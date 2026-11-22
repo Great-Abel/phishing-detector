@@ -108,6 +108,32 @@ def reset_password(email: str) -> tuple[bool, str]:
         return False, f"Error: {e}"
 
 
+def update_password(new_password: str) -> tuple[bool, str]:
+    """Update password user yang sedang dalam sesi recovery."""
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return False, f"Password minimal {MIN_PASSWORD_LENGTH} karakter."
+    try:
+        get_client().auth.update_user({"password": new_password})
+        return True, "Password berhasil diperbarui! Silakan login."
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
+def exchange_recovery_token(access_token: str, refresh_token: str) -> tuple[bool, str]:
+    """
+    Tukar token recovery dari URL email menjadi sesi aktif.
+    Dipanggil saat user klik link reset password dari email.
+    """
+    try:
+        res = get_client().auth.set_session(access_token, refresh_token)
+        if res.user:
+            _set_session(res.user)
+            return True, "Token valid."
+        return False, "Token tidak valid atau sudah kadaluarsa."
+    except Exception as e:
+        return False, f"Token error: {e}"
+
+
 # ── Helper ─────────────────────────────────────────────────────────────────────
 
 def _fail_message(sisa_coba: int) -> str:

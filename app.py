@@ -6,6 +6,7 @@ from services.detector_service import is_valid_url, predict
 from services.audit_service import save_audit
 from ui.styles import inject_css
 from ui.auth_page import show_auth_page
+from ui.reset_page import show_reset_page
 from ui.components import render_sidebar, render_hero, render_result, render_audit_trail
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -21,6 +22,16 @@ inject_css()
 missing = validate_config()
 if missing:
     st.error(f"❌ ENV vars belum diisi: {', '.join(missing)}. Periksa file .env kamu.")
+    st.stop()
+
+# ── Recovery token check (dari link email reset password) ──────────────────────
+params = st.query_params
+access_token  = params.get("access_token", "")
+refresh_token = params.get("refresh_token", "")
+token_type    = params.get("type", "")
+
+if token_type == "recovery" and access_token:
+    show_reset_page(access_token, refresh_token)
     st.stop()
 
 # ── Auth guard ─────────────────────────────────────────────────────────────────
