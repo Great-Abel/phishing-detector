@@ -3,6 +3,11 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
+# Dataset & model (generate lokal)
 data/phishing_dataset.csv
 data/analisis_kesalahan_model.csv
-model/phishing_model.pkl
+
+# Environment — JANGAN diupload ke GitHub
+.env
+.env.local
+.env.*.local
