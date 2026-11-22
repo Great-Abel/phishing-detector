@@ -13,7 +13,7 @@ def show_auth_page() -> None:
     if "auth_page" not in st.session_state:
         st.session_state["auth_page"] = "login"
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         if st.button(
             "🔑 Login", use_container_width=True,
@@ -27,13 +27,6 @@ def show_auth_page() -> None:
             type="primary" if st.session_state["auth_page"] == "register" else "secondary",
         ):
             st.session_state["auth_page"] = "register"
-            st.rerun()
-    with col3:
-        if st.button(
-            "🔓 Lupa Password", use_container_width=True,
-            type="primary" if st.session_state["auth_page"] == "forgot" else "secondary",
-        ):
-            st.session_state["auth_page"] = "forgot"
             st.rerun()
 
     st.divider()
@@ -55,6 +48,45 @@ def _login_form() -> None:
         email     = st.text_input("Email", placeholder="email@contoh.com")
         password  = st.text_input("Password", type="password", placeholder="••••••••")
         submitted = st.form_submit_button("Login", use_container_width=True, type="primary")
+
+    # Link lupa password di kanan bawah form
+    _, col_link = st.columns([3, 1])
+    with col_link:
+        if st.button(
+            "Lupa Password?",
+            key="btn_forgot",
+            use_container_width=True,
+            type="secondary",
+        ):
+            st.session_state["auth_page"] = "forgot"
+            st.rerun()
+
+    # CSS: warnai tombol lupa password jadi merah kecil
+    st.markdown("""
+<style>
+div[data-testid="stButton"]:has(button[kind="secondary"]#btn_forgot) button,
+button[kind="secondary"][data-testid="baseButton-secondary"] {
+    all: unset;
+}
+/* Target tombol Lupa Password? via key */
+div[data-testid="column"]:last-child .stButton button {
+    background: transparent !important;
+    color: #ff4b4b !important;
+    border: none !important;
+    font-size: 0.82rem !important;
+    padding: 0 !important;
+    text-decoration: underline !important;
+    cursor: pointer !important;
+    box-shadow: none !important;
+    width: auto !important;
+    min-height: unset !important;
+}
+div[data-testid="column"]:last-child .stButton button:hover {
+    color: #ff2222 !important;
+    background: transparent !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
     if submitted:
         if not email or not password:
