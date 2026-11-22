@@ -22,9 +22,12 @@ UPSTASH_REDIS_URL: str   = os.getenv("UPSTASH_REDIS_REST_URL", "")
 UPSTASH_REDIS_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
 
 # ── Rate Limiter ───────────────────────────────────────────────────────────────
-RATE_LIMIT_MAX_ATTEMPTS: int  = 5   # maks percobaan gagal
-RATE_LIMIT_WINDOW_SECS: int   = 60  # window tracking (detik)
-RATE_LIMIT_COOLDOWN_SECS: int = 60  # durasi kunci setelah maks tercapai
+RATE_LIMIT_MAX_ATTEMPTS: int  = 5    # maks gagal per email
+RATE_LIMIT_WINDOW_SECS: int   = 60   # window tracking (detik)
+RATE_LIMIT_COOLDOWN_SECS: int = 60   # kunci email (detik)
+
+RATE_LIMIT_IP_MAX_ATTEMPTS: int  = 20   # maks gagal per IP (lebih longgar)
+RATE_LIMIT_IP_COOLDOWN_SECS: int = 900  # kunci IP 15 menit
 
 
 def validate_config() -> list[str]:

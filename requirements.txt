@@ -4,3 +4,4 @@ scikit-learn
 joblib
 supabase
 python-dotenv
+upstash-redis

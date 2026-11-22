@@ -2,7 +2,8 @@ import streamlit as st
 from supabase import create_client, Client
 from config.settings import (
     SUPABASE_URL, SUPABASE_ANON_KEY,
-    MIN_PASSWORD_LENGTH, validate_config
+    MIN_PASSWORD_LENGTH, validate_config,
+    RATE_LIMIT_IP_COOLDOWN_SECS,
 )
 from services import rate_limiter
 
@@ -40,10 +41,7 @@ def clear_session() -> None:
 # ── Auth actions ───────────────────────────────────────────────────────────────
 
 def register(email: str, password: str) -> tuple[bool, str]:
-    """
-    Daftarkan user baru lewat Supabase Auth.
-    Supabase kirim email konfirmasi otomatis.
-    """
+    """Daftarkan user baru lewat Supabase Auth."""
     email = email.strip().lower()
 
     if len(password) < MIN_PASSWORD_LENGTH:
@@ -64,17 +62,24 @@ def register(email: str, password: str) -> tuple[bool, str]:
         return False, f"Error: {e}"
 
 
-def login(email: str, password: str) -> tuple[bool, str]:
+def login(email: str, password: str, ip: str = "unknown") -> tuple[bool, str]:
     """
     Login user lewat Supabase Auth.
-    Dilindungi rate limiter Upstash Redis — maks 5x gagal, kunci 60 detik.
+    Dual-layer rate limiter: per email (5x/60s) + per IP (20x/15 menit).
+    VPN bypass IP? Email layer tetap aktif.
     """
     email = email.strip().lower()
 
-    # Cek rate limit per email
-    locked, sisa = rate_limiter.is_locked(email)
-    if locked:
-        return False, f"🔒 Terlalu banyak percobaan. Coba lagi dalam {sisa} detik."
+    # Layer 1 — cek per email
+    locked_email, sisa_email = rate_limiter.is_locked_email(email)
+    if locked_email:
+        return False, f"🔒 Akun ini dikunci. Coba lagi dalam {sisa_email} detik."
+
+    # Layer 2 — cek per IP
+    locked_ip, sisa_ip = rate_limiter.is_locked_ip(ip)
+    if locked_ip:
+        menit = sisa_ip // 60
+        return False, f"🔒 Terlalu banyak percobaan dari jaringan ini. Coba lagi dalam {menit} menit."
 
     try:
         response = get_client().auth.sign_in_with_password({
@@ -82,22 +87,30 @@ def login(email: str, password: str) -> tuple[bool, str]:
             "password": password,
         })
         if response.user:
-            rate_limiter.reset(email)
+            # Login berhasil — reset kedua layer
+            rate_limiter.reset_email(email)
+            rate_limiter.reset_ip(ip)
             _set_session(response.user)
             return True, f"Selamat datang, {response.user.email}!"
-        rate_limiter.record_failed(email)
+
+        # Login gagal — catat di kedua layer
+        rate_limiter.record_failed_email(email)
+        rate_limiter.record_failed_ip(ip)
         return False, "Login gagal. Periksa email dan password kamu."
+
     except Exception as e:
         msg = str(e).lower()
         if "invalid login credentials" in msg:
-            rate_limiter.record_failed(email)
+            rate_limiter.record_failed_email(email)
+            rate_limiter.record_failed_ip(ip)
             sisa_coba = rate_limiter.remaining_attempts(email)
             if sisa_coba > 0:
                 return False, f"Email atau password salah. Sisa percobaan: {sisa_coba}x"
-            return False, "🔒 Terlalu banyak percobaan. Coba lagi dalam 60 detik."
+            return False, f"🔒 Akun dikunci 60 detik karena terlalu banyak percobaan."
         if "email not confirmed" in msg:
             return False, "Email belum dikonfirmasi. Cek inbox kamu."
-        rate_limiter.record_failed(email)
+        rate_limiter.record_failed_email(email)
+        rate_limiter.record_failed_ip(ip)
         return False, f"Error: {e}"
 
 

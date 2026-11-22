@@ -1,6 +1,24 @@
 import streamlit as st
+from streamlit.web.server.websocket_headers import _get_websocket_headers
 from services.auth_service import login, register
-from services.rate_limiter import is_locked, remaining_attempts
+from services.rate_limiter import is_locked_email, is_locked_ip, remaining_attempts
+
+
+def _get_client_ip() -> str:
+    """
+    Ambil IP client dari header HTTP.
+    Prioritas: X-Forwarded-For (di balik proxy/Streamlit Cloud) → fallback 'unknown'.
+    """
+    try:
+        headers = _get_websocket_headers()
+        if headers:
+            forwarded = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
+            if forwarded:
+                # X-Forwarded-For bisa berisi: "client, proxy1, proxy2"
+                return forwarded.split(",")[0].strip()
+    except Exception:
+        pass
+    return "unknown"
 
 
 def show_auth_page() -> None:
@@ -43,6 +61,14 @@ def show_auth_page() -> None:
 def _login_form() -> None:
     st.subheader("Login")
 
+    # Cek IP lock sebelum form ditampilkan
+    ip = _get_client_ip()
+    locked_ip, sisa_ip = is_locked_ip(ip)
+    if locked_ip:
+        menit = sisa_ip // 60
+        st.error(f"🔒 Terlalu banyak percobaan dari jaringan ini. Coba lagi dalam **{menit} menit**.")
+        return
+
     with st.form("form_login", clear_on_submit=False):
         email    = st.text_input("Email", placeholder="email@contoh.com")
         password = st.text_input("Password", type="password", placeholder="••••••••")
@@ -55,19 +81,19 @@ def _login_form() -> None:
 
         clean_email = email.strip().lower()
 
-        # Cek lock setelah email diisi
-        locked, sisa = is_locked(clean_email)
-        if locked:
-            st.error(f"🔒 Akun dikunci sementara. Coba lagi dalam **{sisa} detik**.")
+        # Cek email lock
+        locked_email, sisa_email = is_locked_email(clean_email)
+        if locked_email:
+            st.error(f"🔒 Akun dikunci sementara. Coba lagi dalam **{sisa_email} detik**.")
             return
 
-        # Tampilkan sisa percobaan kalau sudah pernah gagal
+        # Tampilkan sisa percobaan
         sisa_coba = remaining_attempts(clean_email)
         if sisa_coba < 5:
-            st.warning(f"⚠️ Sisa percobaan: **{sisa_coba}x** sebelum dikunci 60 detik.")
+            st.warning(f"⚠️ Sisa percobaan: **{sisa_coba}x** sebelum akun dikunci 60 detik.")
 
         with st.spinner("Memverifikasi..."):
-            ok, msg = login(email, password)
+            ok, msg = login(email, password, ip=ip)
         if ok:
             st.success(msg)
             st.rerun()

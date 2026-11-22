@@ -1,26 +1,28 @@
 """
-Rate limiter berbasis Upstash Redis.
-Strategi: sliding window per identifier (email).
-- Maks 5 percobaan gagal dalam window 60 detik
-- Setelah maks tercapai, kunci selama 60 detik
+Rate limiter berbasis Upstash Redis — dual layer: per email + per IP.
+
+Strategi:
+- Layer 1 (per email) : maks 5 gagal → kunci 60 detik
+- Layer 2 (per IP)    : maks 20 gagal → kunci 15 menit
+  IP-based lebih longgar karena bisa shared (NAT, kantor, kampus).
+  VPN bypass IP? Tidak masalah — email layer tetap aktif.
 """
 import streamlit as st
 from upstash_redis import Redis
 from config.settings import (
     UPSTASH_REDIS_URL, UPSTASH_REDIS_TOKEN,
-    RATE_LIMIT_MAX_ATTEMPTS, RATE_LIMIT_WINDOW_SECS, RATE_LIMIT_COOLDOWN_SECS
+    RATE_LIMIT_MAX_ATTEMPTS, RATE_LIMIT_WINDOW_SECS, RATE_LIMIT_COOLDOWN_SECS,
+    RATE_LIMIT_IP_MAX_ATTEMPTS, RATE_LIMIT_IP_COOLDOWN_SECS,
 )
 
-_KEY_PREFIX_ATTEMPTS = "login_attempts:"
-_KEY_PREFIX_LOCKED   = "login_locked:"
+_PFX_EMAIL_ATTEMPTS = "rl:email:attempts:"
+_PFX_EMAIL_LOCKED   = "rl:email:locked:"
+_PFX_IP_ATTEMPTS    = "rl:ip:attempts:"
+_PFX_IP_LOCKED      = "rl:ip:locked:"
 
 
 @st.cache_resource
 def _get_redis() -> Redis | None:
-    """
-    Inisialisasi koneksi Redis sekali per app instance.
-    Return None kalau credentials belum diisi — rate limiter dinonaktifkan.
-    """
     if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
         return None
     try:
@@ -29,19 +31,11 @@ def _get_redis() -> Redis | None:
         return None
 
 
-# ── Public API ─────────────────────────────────────────────────────────────────
+# ── Internal helpers ───────────────────────────────────────────────────────────
 
-def is_locked(identifier: str) -> tuple[bool, int]:
-    """
-    Cek apakah identifier (email) sedang dikunci.
-    Return (locked: bool, sisa_ttl_detik: int)
-    """
-    r = _get_redis()
-    if r is None:
-        return False, 0
-
+def _is_locked(r: Redis, locked_key: str) -> tuple[bool, int]:
     try:
-        ttl = r.ttl(f"{_KEY_PREFIX_LOCKED}{identifier}")
+        ttl = r.ttl(locked_key)
         if ttl > 0:
             return True, ttl
     except Exception:
@@ -49,56 +43,109 @@ def is_locked(identifier: str) -> tuple[bool, int]:
     return False, 0
 
 
-def record_failed(identifier: str) -> int:
-    """
-    Catat satu percobaan gagal.
-    Return jumlah percobaan gagal saat ini.
-    Otomatis kunci kalau sudah mencapai MAX_ATTEMPTS.
-    """
-    r = _get_redis()
-    if r is None:
-        return 0
-
-    key = f"{_KEY_PREFIX_ATTEMPTS}{identifier}"
+def _record(r: Redis, attempts_key: str, locked_key: str,
+            max_attempts: int, window: int, cooldown: int) -> int:
     try:
-        attempts = r.incr(key)
-        # Set TTL window hanya pada percobaan pertama
-        if attempts == 1:
-            r.expire(key, RATE_LIMIT_WINDOW_SECS)
-
-        if attempts >= RATE_LIMIT_MAX_ATTEMPTS:
-            # Kunci identifier
-            r.set(f"{_KEY_PREFIX_LOCKED}{identifier}", 1, ex=RATE_LIMIT_COOLDOWN_SECS)
-            # Reset counter
-            r.delete(key)
-            return RATE_LIMIT_MAX_ATTEMPTS
-
-        return attempts
+        count = r.incr(attempts_key)
+        if count == 1:
+            r.expire(attempts_key, window)
+        if count >= max_attempts:
+            r.set(locked_key, 1, ex=cooldown)
+            r.delete(attempts_key)
+            return max_attempts
+        return count
     except Exception:
         return 0
 
 
-def reset(identifier: str) -> None:
-    """Reset semua state rate limiter untuk identifier (setelah login berhasil)."""
-    r = _get_redis()
-    if r is None:
-        return
+def _reset(r: Redis, attempts_key: str, locked_key: str) -> None:
     try:
-        r.delete(f"{_KEY_PREFIX_ATTEMPTS}{identifier}")
-        r.delete(f"{_KEY_PREFIX_LOCKED}{identifier}")
+        r.delete(attempts_key)
+        r.delete(locked_key)
     except Exception:
         pass
 
 
-def remaining_attempts(identifier: str) -> int:
-    """Sisa percobaan sebelum dikunci."""
+# ── Public API — Email layer ───────────────────────────────────────────────────
+
+def is_locked_email(email: str) -> tuple[bool, int]:
+    r = _get_redis()
+    if r is None:
+        return False, 0
+    return _is_locked(r, f"{_PFX_EMAIL_LOCKED}{email}")
+
+
+def record_failed_email(email: str) -> int:
+    r = _get_redis()
+    if r is None:
+        return 0
+    return _record(
+        r,
+        f"{_PFX_EMAIL_ATTEMPTS}{email}",
+        f"{_PFX_EMAIL_LOCKED}{email}",
+        RATE_LIMIT_MAX_ATTEMPTS,
+        RATE_LIMIT_WINDOW_SECS,
+        RATE_LIMIT_COOLDOWN_SECS,
+    )
+
+
+def reset_email(email: str) -> None:
+    r = _get_redis()
+    if r is None:
+        return
+    _reset(r, f"{_PFX_EMAIL_ATTEMPTS}{email}", f"{_PFX_EMAIL_LOCKED}{email}")
+
+
+def remaining_attempts(email: str) -> int:
     r = _get_redis()
     if r is None:
         return RATE_LIMIT_MAX_ATTEMPTS
-
     try:
-        val = r.get(f"{_KEY_PREFIX_ATTEMPTS}{identifier}")
-        current = int(val) if val else 0
-        return max(0, RATE_LIMIT_MAX_ATTEMPTS - current)
+        val = r.get(f"{_PFX_EMAIL_ATTEMPTS}{email}")
+        return max(0, RATE_LIMIT_MAX_ATTEMPTS - (int(val) if val else 0))
     except Exception:
         return RATE_LIMIT_MAX_ATTEMPTS
+
+
+# ── Public API — IP layer ──────────────────────────────────────────────────────
+
+def is_locked_ip(ip: str) -> tuple[bool, int]:
+    r = _get_redis()
+    if r is None:
+        return False, 0
+    return _is_locked(r, f"{_PFX_IP_LOCKED}{ip}")
+
+
+def record_failed_ip(ip: str) -> int:
+    r = _get_redis()
+    if r is None:
+        return 0
+    return _record(
+        r,
+        f"{_PFX_IP_ATTEMPTS}{ip}",
+        f"{_PFX_IP_LOCKED}{ip}",
+        RATE_LIMIT_IP_MAX_ATTEMPTS,
+        RATE_LIMIT_WINDOW_SECS,
+        RATE_LIMIT_IP_COOLDOWN_SECS,
+    )
+
+
+def reset_ip(ip: str) -> None:
+    r = _get_redis()
+    if r is None:
+        return
+    _reset(r, f"{_PFX_IP_ATTEMPTS}{ip}", f"{_PFX_IP_LOCKED}{ip}")
+
+
+# ── Backward-compat aliases (dipakai auth_service) ────────────────────────────
+
+def is_locked(identifier: str) -> tuple[bool, int]:
+    return is_locked_email(identifier)
+
+
+def record_failed(identifier: str) -> int:
+    return record_failed_email(identifier)
+
+
+def reset(identifier: str) -> None:
+    reset_email(identifier)
