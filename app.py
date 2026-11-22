@@ -25,7 +25,29 @@ if missing:
     st.stop()
 
 # ── Recovery token check (dari link email reset password) ──────────────────────
-params = st.query_params
+# Supabase kirim token di URL fragment (#access_token=...) bukan query params.
+# JS di bawah baca fragment dan redirect ke ?access_token=... supaya Streamlit bisa baca.
+st.markdown("""
+<script>
+(function() {
+    const hash = window.location.hash.substring(1);
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const type = params.get("type");
+    const access_token = params.get("access_token");
+    if (type === "recovery" && access_token) {
+        const refresh_token = params.get("refresh_token") || "";
+        const newUrl = window.location.pathname
+            + "?access_token=" + encodeURIComponent(access_token)
+            + "&refresh_token=" + encodeURIComponent(refresh_token)
+            + "&type=recovery";
+        window.location.replace(newUrl);
+    }
+})();
+</script>
+""", unsafe_allow_html=True)
+
+params        = st.query_params
 access_token  = params.get("access_token", "")
 refresh_token = params.get("refresh_token", "")
 token_type    = params.get("type", "")
