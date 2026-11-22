@@ -31,9 +31,8 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.markdown("## 🛡️ Phishing Detector")
         st.divider()
-        st.markdown("### 👤 Akun")
-        st.markdown(f"**{user.email}**")
-        st.caption("Status: ✅ Terautentikasi")
+        st.markdown(f"👤 **{user.email}**")
+        st.caption("✅ Terautentikasi")
         st.divider()
         st.markdown("**Tentang Aplikasi**")
         st.caption(
