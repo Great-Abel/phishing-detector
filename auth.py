@@ -97,6 +97,56 @@ def logout():
     clear_session()
 
 
+# ── Audit Trail ────────────────────────────────────────────────────────────────
+
+def save_audit(url: str, prediction: str, phishing_pct: float, legit_pct: float) -> tuple[bool, str]:
+    """
+    Simpan hasil scan URL ke tabel audit_trail di Supabase.
+    Hanya dipanggil setelah URL tervalidasi sebagai URL yang benar.
+    """
+    user = get_current_user()
+    if not user:
+        return False, "User tidak terautentikasi."
+
+    supabase = get_supabase_client()
+    try:
+        supabase.table("audit_trail").insert({
+            "user_id":      user.id,
+            "user_email":   user.email,
+            "url":          url,
+            "prediction":   prediction,
+            "phishing_pct": round(phishing_pct, 2),
+            "legit_pct":    round(legit_pct, 2),
+        }).execute()
+        return True, "Audit tersimpan."
+    except Exception as e:
+        return False, str(e)
+
+
+def get_audit_trail(limit: int = 50) -> list[dict]:
+    """
+    Ambil riwayat scan milik user yang sedang login.
+    Diurutkan dari yang terbaru, maksimal `limit` baris.
+    """
+    user = get_current_user()
+    if not user:
+        return []
+
+    supabase = get_supabase_client()
+    try:
+        response = (
+            supabase.table("audit_trail")
+            .select("user_email, url, prediction, phishing_pct, legit_pct, scanned_at")
+            .eq("user_id", user.id)
+            .order("scanned_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return response.data or []
+    except Exception:
+        return []
+
+
 # ── UI ─────────────────────────────────────────────────────────────────────────
 
 def show_auth_page():
