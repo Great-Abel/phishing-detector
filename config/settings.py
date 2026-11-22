@@ -18,8 +18,8 @@ AUDIT_TRAIL_LIMIT: int = 50
 WIB_OFFSET_HOURS: int = 7
 
 # ── Upstash Redis ──────────────────────────────────────────────────────────────
-UPSTASH_REDIS_URL: str   = os.getenv("UPSTASH_REDIS_URL", "")
-UPSTASH_REDIS_TOKEN: str = os.getenv("UPSTASH_REDIS_TOKEN", "")
+UPSTASH_REDIS_URL: str   = os.getenv("UPSTASH_REDIS_REST_URL", "")
+UPSTASH_REDIS_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
 
 # ── Rate Limiter ───────────────────────────────────────────────────────────────
 RATE_LIMIT_MAX_ATTEMPTS: int  = 5   # maks percobaan gagal
