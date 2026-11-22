@@ -1,9 +1,14 @@
+import time
 import streamlit as st
 from supabase import create_client, Client
 from config.settings import (
     SUPABASE_URL, SUPABASE_ANON_KEY,
     MIN_PASSWORD_LENGTH, validate_config
 )
+
+# ── Rate limiter constants ─────────────────────────────────────────────────────
+_MAX_ATTEMPTS   = 5     # maks percobaan gagal
+_COOLDOWN_SECS  = 60    # cooldown dalam detik setelah maks tercapai
 
 
 # ── Supabase client (singleton per session) ────────────────────────────────────
@@ -36,6 +41,50 @@ def clear_session() -> None:
     st.session_state["auth_page"] = "login"
 
 
+# ── Rate limiter ───────────────────────────────────────────────────────────────
+
+def _init_rate_limiter() -> None:
+    """Inisialisasi state rate limiter kalau belum ada."""
+    if "login_attempts" not in st.session_state:
+        st.session_state["login_attempts"] = 0
+    if "login_locked_until" not in st.session_state:
+        st.session_state["login_locked_until"] = 0.0
+
+
+def is_login_locked() -> tuple[bool, int]:
+    """
+    Cek apakah login sedang dikunci.
+    Return (locked: bool, sisa_detik: int)
+    """
+    _init_rate_limiter()
+    now = time.time()
+    locked_until = st.session_state["login_locked_until"]
+    if locked_until > now:
+        return True, int(locked_until - now)
+    return False, 0
+
+
+def _record_failed_attempt() -> None:
+    """Catat satu percobaan login gagal, kunci kalau sudah melebihi batas."""
+    _init_rate_limiter()
+    st.session_state["login_attempts"] += 1
+    if st.session_state["login_attempts"] >= _MAX_ATTEMPTS:
+        st.session_state["login_locked_until"] = time.time() + _COOLDOWN_SECS
+        st.session_state["login_attempts"] = 0  # reset counter setelah dikunci
+
+
+def _reset_attempts() -> None:
+    """Reset counter setelah login berhasil."""
+    st.session_state["login_attempts"] = 0
+    st.session_state["login_locked_until"] = 0.0
+
+
+def remaining_attempts() -> int:
+    """Sisa percobaan sebelum dikunci."""
+    _init_rate_limiter()
+    return max(0, _MAX_ATTEMPTS - st.session_state["login_attempts"])
+
+
 # ── Auth actions ───────────────────────────────────────────────────────────────
 
 def register(email: str, password: str) -> tuple[bool, str]:
@@ -64,7 +113,15 @@ def register(email: str, password: str) -> tuple[bool, str]:
 
 
 def login(email: str, password: str) -> tuple[bool, str]:
-    """Login user lewat Supabase Auth."""
+    """
+    Login user lewat Supabase Auth.
+    Dilindungi rate limiter — maks 5 kali gagal, lalu kena cooldown 60 detik.
+    """
+    # Cek rate limit sebelum proses
+    locked, sisa = is_login_locked()
+    if locked:
+        return False, f"🔒 Terlalu banyak percobaan. Coba lagi dalam {sisa} detik."
+
     email = email.strip().lower()
 
     try:
@@ -73,15 +130,22 @@ def login(email: str, password: str) -> tuple[bool, str]:
             "password": password,
         })
         if response.user:
+            _reset_attempts()
             _set_session(response.user)
             return True, f"Selamat datang, {response.user.email}!"
+        _record_failed_attempt()
         return False, "Login gagal. Periksa email dan password kamu."
     except Exception as e:
         msg = str(e).lower()
         if "invalid login credentials" in msg:
-            return False, "Email atau password salah."
+            _record_failed_attempt()
+            sisa_coba = remaining_attempts()
+            if sisa_coba > 0:
+                return False, f"Email atau password salah. Sisa percobaan: {sisa_coba}x"
+            return False, f"🔒 Terlalu banyak percobaan. Coba lagi dalam {_COOLDOWN_SECS} detik."
         if "email not confirmed" in msg:
             return False, "Email belum dikonfirmasi. Cek inbox kamu."
+        _record_failed_attempt()
         return False, f"Error: {e}"
 
 

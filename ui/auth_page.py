@@ -1,5 +1,5 @@
 import streamlit as st
-from services.auth_service import login, register
+from services.auth_service import login, register, is_login_locked, remaining_attempts
 
 
 def show_auth_page() -> None:
@@ -41,6 +41,18 @@ def show_auth_page() -> None:
 
 def _login_form() -> None:
     st.subheader("Login")
+
+    # Tampilkan status rate limit
+    locked, sisa = is_login_locked()
+    if locked:
+        st.error(f"🔒 Akun dikunci sementara. Coba lagi dalam **{sisa} detik**.")
+        st.info("Terlalu banyak percobaan login gagal.")
+        return
+
+    sisa_coba = remaining_attempts()
+    if sisa_coba < 5:
+        st.warning(f"⚠️ Sisa percobaan login: **{sisa_coba}x** sebelum dikunci 60 detik.")
+
     with st.form("form_login", clear_on_submit=False):
         email    = st.text_input("Email", placeholder="email@contoh.com")
         password = st.text_input("Password", type="password", placeholder="••••••••")
