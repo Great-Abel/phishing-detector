@@ -3,12 +3,10 @@ from supabase import create_client, Client
 from config.settings import (
     SUPABASE_URL, SUPABASE_ANON_KEY,
     MIN_PASSWORD_LENGTH, validate_config,
-    RATE_LIMIT_IP_COOLDOWN_SECS,
 )
-from services import rate_limiter
 
 
-# ── Supabase client (singleton per session) ────────────────────────────────────
+# ── Supabase client ────────────────────────────────────────────────────────────
 
 @st.cache_resource
 def get_client() -> Client:
@@ -41,17 +39,13 @@ def clear_session() -> None:
 # ── Auth actions ───────────────────────────────────────────────────────────────
 
 def register(email: str, password: str) -> tuple[bool, str]:
-    """Daftarkan user baru lewat Supabase Auth."""
     email = email.strip().lower()
 
     if len(password) < MIN_PASSWORD_LENGTH:
         return False, f"Password minimal {MIN_PASSWORD_LENGTH} karakter."
 
     try:
-        response = get_client().auth.sign_up({
-            "email": email,
-            "password": password,
-        })
+        response = get_client().auth.sign_up({"email": email, "password": password})
         if response.user:
             return True, "Registrasi berhasil! Cek email untuk konfirmasi akun."
         return False, "Registrasi gagal. Coba lagi."
@@ -62,67 +56,25 @@ def register(email: str, password: str) -> tuple[bool, str]:
         return False, f"Error: {e}"
 
 
-def login(email: str, password: str, ip: str = "unknown") -> tuple[bool, str]:
-    """
-    Login user lewat Supabase Auth.
-    Dual-layer rate limiter: per email (5x/60s) + per IP (20x/15 menit).
-    VPN bypass IP? Email layer tetap aktif.
-    """
+def login(email: str, password: str) -> tuple[bool, str]:
     email = email.strip().lower()
 
-    # Layer 1 — cek per email
-    locked_email, sisa_email = rate_limiter.is_locked_email(email)
-    if locked_email:
-        return False, f"🔒 Akun ini dikunci. Coba lagi dalam {sisa_email} detik."
-
-    # Layer 2 — cek per IP
-    locked_ip, sisa_ip = rate_limiter.is_locked_ip(ip)
-    if locked_ip:
-        menit = sisa_ip // 60
-        return False, f"🔒 Terlalu banyak percobaan dari jaringan ini. Coba lagi dalam {menit} menit."
-
     try:
-        response = get_client().auth.sign_in_with_password({
-            "email": email,
-            "password": password,
-        })
+        response = get_client().auth.sign_in_with_password({"email": email, "password": password})
         if response.user:
-            # Login berhasil — reset kedua layer
-            rate_limiter.reset_email(email)
-            rate_limiter.reset_ip(ip)
             _set_session(response.user)
             return True, f"Selamat datang, {response.user.email}!"
-
-        # Login gagal — catat di kedua layer
-        rate_limiter.record_failed_email(email)
-        rate_limiter.record_failed_ip(ip)
         return False, "Login gagal. Periksa email dan password kamu."
-
     except Exception as e:
         msg = str(e).lower()
         if "invalid login credentials" in msg:
-            rate_limiter.record_failed_email(email)
-            rate_limiter.record_failed_ip(ip)
-            sisa_coba = rate_limiter.remaining_attempts(email)
-            if sisa_coba == 0:
-                return False, "🔒 Akun dikunci 60 detik karena terlalu banyak percobaan."
-            peringatan = {
-                4: "Sisa **4 percobaan** lagi.",
-                3: "Sisa **3 percobaan** lagi.",
-                2: "Hanya tersisa **2 percobaan** lagi, hati-hati.",
-                1: "Ini percobaan **terakhirmu** sebelum akun dikunci 60 detik!",
-            }
-            keterangan = peringatan.get(sisa_coba, "")
-            return False, f"Email atau password salah. {keterangan}"
+            return False, "Email atau password salah."
         if "email not confirmed" in msg:
             return False, "Email belum dikonfirmasi. Cek inbox kamu."
-        rate_limiter.record_failed_email(email)
-        rate_limiter.record_failed_ip(ip)
         return False, f"Error: {e}"
 
 
 def logout() -> None:
-    """Logout dan hapus session."""
     try:
         get_client().auth.sign_out()
     except Exception:
