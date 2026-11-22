@@ -66,7 +66,16 @@ def _login_form() -> None:
     locked_ip, sisa_ip = is_locked_ip(ip)
     if locked_ip:
         menit = sisa_ip // 60
-        st.error(f"🔒 Terlalu banyak percobaan dari jaringan ini. Coba lagi dalam **{menit} menit**.")
+        detik = sisa_ip % 60
+        waktu = f"{menit} menit {detik} detik" if menit > 0 else f"{detik} detik"
+        st.error(
+            "🚫 Akses Login Diblokir Sementara\n\n"
+            f"Terlalu banyak percobaan login gagal dari jaringan kamu. "
+            f"Sebagai langkah keamanan, akses login dinonaktifkan selama **{waktu}**.\n\n"
+            "Jika ini bukan kamu, kemungkinan ada yang mencoba mengakses akun dari jaringan ini. "
+            "Pastikan password kamu aman."
+        )
+        st.info("💡 Sudah menunggu cukup lama? Muat ulang halaman untuk mencoba kembali.")
         return
 
     with st.form("form_login", clear_on_submit=False):
@@ -84,13 +93,27 @@ def _login_form() -> None:
         # Cek email lock
         locked_email, sisa_email = is_locked_email(clean_email)
         if locked_email:
-            st.error(f"🔒 Akun dikunci sementara. Coba lagi dalam **{sisa_email} detik**.")
+            menit = sisa_email // 60
+            detik = sisa_email % 60
+            waktu = f"{menit} menit {detik} detik" if menit > 0 else f"{detik} detik"
+            st.error(
+                "🔒 Akun Dikunci Sementara\n\n"
+                f"Terlalu banyak percobaan login yang gagal untuk akun ini. "
+                f"Akun dikunci selama **{waktu}** untuk melindungi keamananmu.\n\n"
+                "Jika kamu lupa password, gunakan fitur **Lupa Password** melalui Supabase."
+            )
             return
 
         # Tampilkan sisa percobaan
         sisa_coba = remaining_attempts(clean_email)
-        if sisa_coba < 5:
-            st.warning(f"⚠️ Sisa percobaan: **{sisa_coba}x** sebelum akun dikunci 60 detik.")
+        if sisa_coba == 4:
+            st.warning("⚠️ Password salah. Kamu punya **4 percobaan lagi** sebelum akun dikunci 60 detik.")
+        elif sisa_coba == 3:
+            st.warning("⚠️ Password salah. Tersisa **3 percobaan** sebelum akun dikunci.")
+        elif sisa_coba == 2:
+            st.warning("⚠️ Hati-hati! Hanya tersisa **2 percobaan** lagi.")
+        elif sisa_coba == 1:
+            st.warning("🚨 Peringatan! Ini percobaan **terakhirmu**. Gagal lagi = akun dikunci 60 detik.")
 
         with st.spinner("Memverifikasi..."):
             ok, msg = login(email, password, ip=ip)
