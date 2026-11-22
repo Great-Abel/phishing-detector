@@ -1,5 +1,4 @@
 import streamlit as st
-from streamlit.web.server.websocket_headers import _get_websocket_headers
 from services.auth_service import login, register
 from services.rate_limiter import is_locked_email, is_locked_ip, remaining_attempts
 
@@ -7,15 +6,14 @@ from services.rate_limiter import is_locked_email, is_locked_ip, remaining_attem
 def _get_client_ip() -> str:
     """
     Ambil IP client dari header HTTP.
-    Prioritas: X-Forwarded-For (di balik proxy/Streamlit Cloud) → fallback 'unknown'.
+    Pakai st.context.headers (API resmi Streamlit 1.37+).
+    Prioritas: X-Forwarded-For → fallback 'unknown'.
     """
     try:
-        headers = _get_websocket_headers()
-        if headers:
-            forwarded = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
-            if forwarded:
-                # X-Forwarded-For bisa berisi: "client, proxy1, proxy2"
-                return forwarded.split(",")[0].strip()
+        headers = st.context.headers
+        forwarded = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     except Exception:
         pass
     return "unknown"
