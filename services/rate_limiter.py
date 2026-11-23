@@ -10,9 +10,14 @@ import streamlit as st
 from upstash_redis import Redis
 from config.settings import UPSTASH_REDIS_URL, UPSTASH_REDIS_TOKEN
 
-MAX_ATTEMPTS  = 5   # maks percobaan gagal
-WINDOW_SECS   = 60  # window tracking
-COOLDOWN_SECS = 60  # durasi kunci
+MAX_ATTEMPTS  = 5   # maks percobaan gagal login
+WINDOW_SECS   = 60  # window tracking login
+COOLDOWN_SECS = 60  # durasi kunci login
+
+# ── Reset password rate limit ──────────────────────────────────────────────────
+RESET_MAX        = 2     # maks kirim email reset per window
+RESET_WINDOW     = 3600  # window 1 jam (detik)
+RESET_COOLDOWN   = 3600  # kunci 1 jam setelah maks tercapai
 
 
 @st.cache_resource
@@ -99,3 +104,51 @@ def reset(email: str) -> None:
         r.delete(_key_locked(email))
     except Exception:
         pass
+
+
+# ── Reset password rate limit ──────────────────────────────────────────────────
+
+def _key_reset_attempts(email: str) -> str:
+    return f"rl:reset:attempts:{email}"
+
+def _key_reset_locked(email: str) -> str:
+    return f"rl:reset:locked:{email}"
+
+
+def is_reset_locked(email: str) -> tuple[bool, int]:
+    """
+    Cek apakah email dikunci untuk kirim reset password.
+    Return (locked, sisa_detik).
+    """
+    r = _redis()
+    if r is None:
+        return False, 0
+    try:
+        ttl = r.ttl(_key_reset_locked(email))
+        return (True, ttl) if ttl > 0 else (False, 0)
+    except Exception:
+        return False, 0
+
+
+def record_reset(email: str) -> int:
+    """
+    Catat satu pengiriman email reset.
+    Return sisa kuota (0 = baru saja dikunci).
+    """
+    r = _redis()
+    if r is None:
+        return RESET_MAX
+
+    key_att = _key_reset_attempts(email)
+    key_lck = _key_reset_locked(email)
+    try:
+        count = r.incr(key_att)
+        if count == 1:
+            r.expire(key_att, RESET_WINDOW)
+        if count >= RESET_MAX:
+            r.set(key_lck, 1, ex=RESET_COOLDOWN)
+            r.delete(key_att)
+            return 0
+        return RESET_MAX - count
+    except Exception:
+        return RESET_MAX

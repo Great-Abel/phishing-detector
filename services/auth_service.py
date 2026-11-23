@@ -97,18 +97,32 @@ def logout() -> None:
 
 
 def reset_password(email: str) -> tuple[bool, str]:
-    """Kirim email reset password via Supabase Auth. Link mengarah ke Vercel redirect page."""
+    """Kirim email reset password via Supabase Auth dengan rate limiter."""
     email = email.strip().lower()
     if not email:
         return False, "Email tidak boleh kosong."
+
+    # Cek rate limit per email (maks 2x per jam)
+    locked, sisa = rate_limiter.is_reset_locked(email)
+    if locked:
+        menit = sisa // 60
+        return False, f"⏳ Sudah terlalu banyak permintaan. Coba lagi dalam {menit} menit."
+
     try:
         get_client().auth.reset_password_for_email(
             email,
             options={"redirect_to": "https://great-abel.github.io/phishing-detector/"}
         )
+        # Catat pengiriman
+        rate_limiter.record_reset(email)
         return True, "Link reset password telah dikirim ke email kamu."
     except Exception as e:
-        return False, f"Error: {e}"
+        msg = str(e).lower()
+        if "rate limit" in msg or "email rate limit" in msg:
+            # Paksa kunci supaya tidak bisa coba lagi
+            rate_limiter.record_reset(email)
+            return False, "⏳ Terlalu banyak permintaan email. Coba lagi dalam 1 jam."
+        return False, "Gagal mengirim email. Coba lagi nanti."
 
 
 def update_password(new_password: str) -> tuple[bool, str]:
