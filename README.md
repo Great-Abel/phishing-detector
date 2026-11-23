@@ -1,6 +1,6 @@
 # 🛡️ Detektor Phishing URL Berbasis Machine Learning
 
-Aplikasi web untuk mendeteksi URL phishing secara real-time menggunakan model **Random Forest Classifier** dengan akurasi **99.57%**. Dilengkapi sistem autentikasi pengguna, audit trail global, rate limiter berbasis Redis, dan alur reset password lengkap.
+Aplikasi web untuk mendeteksi URL phishing secara real-time menggunakan model **Random Forest Classifier** dengan akurasi **99.57%**. Model dilatih dengan pendekatan **Hybrid Dataset** — menggabungkan dataset Kaggle, URL legitimate hasil generasi LLM, dan URL legitimate yang dikurasi manual. Dilengkapi sistem autentikasi pengguna, audit trail global, rate limiter berbasis Redis, dan alur reset password lengkap.
 
 > **Final Project — Mata Kuliah Keamanan Informasi**  
 > Program Studi Teknik Informatika
@@ -88,17 +88,54 @@ phishing-detector/
 
 ---
 
-## 📊 Dataset
+## 📊 Dataset — Pendekatan Hybrid
 
-**Sumber:** [Phishing URL Dataset — Kaggle](https://www.kaggle.com/datasets/harisudhan411/phishing-and-legitimate-urls)
+Proyek ini menggunakan pendekatan **Hybrid Dataset** yang menggabungkan tiga sumber data untuk meningkatkan kualitas dan keseimbangan data training, terutama pada kelas *legitimate*.
+
+### Sumber Data
+
+| Sumber | Tipe | Jumlah | Keterangan |
+|---|---|---|---:|
+| [Phishing URL Dataset — Kaggle](https://www.kaggle.com/datasets/harisudhan411/phishing-and-legitimate-urls) | Phishing + Legitimate | 235.795 | Dataset utama |
+| **LLM-generated** | Legitimate tambahan | Variabel | URL legitimate sintetis yang dihasilkan oleh LLM untuk memperkaya variasi pola domain terpercaya |
+| **URL Legitimate Tambahan** | Legitimate tambahan | Variabel | URL dari domain nyata yang dikurasi manual (e-commerce, perbankan, pemerintah, media Indonesia) |
+
+### Distribusi Data Final
 
 | Kategori | Jumlah |
 |---|---:|
 | Legitimate (benign) | 134.850 |
 | Phishing | 100.945 |
-| **Total** | **235.795** |
+| **Total Dataset Kaggle** | **235.795** |
+| + URL Legitimate Tambahan (LLM + Kurasi) | Variabel |
+| **Total Hybrid** | **235.795+** |
 
-**Split data:** 80% training (188.636 sampel) / 20% testing (47.159 sampel) dengan `stratify=y` untuk menjaga proporsi kelas.
+### Mengapa Hybrid?
+
+Dataset Kaggle sudah sangat baik, namun URL legitimate di dalamnya cenderung berstruktur sederhana. Penambahan URL legitimate dari LLM dan kurasi manual bertujuan:
+
+1. **Mengurangi false positive** — model lebih mengenal pola URL legitimate yang kompleks (punya query string panjang, subdomain bertingkat, UUID di path, dll)
+2. **Memperkaya variasi domain Indonesia** — dataset asli didominasi domain internasional; URL dari Tokopedia, BCA, Gojek, dll ditambahkan secara eksplisit
+3. **Menyeimbangkan distribusi kelas** — jumlah legitimate yang lebih banyak membantu model tidak terlalu agresif dalam mendeteksi phishing
+
+### Preprocessing Label
+
+`train_model.py` menerima berbagai format label dan menormalisasinya ke `0` (legitimate) dan `1` (phishing):
+
+```python
+df["label"] = df["label"].replace({
+    "benign":     0,  # label Kaggle
+    "legitimate": 0,  # label tambahan
+    "good":       0,  # label alternatif
+    "phishing":   1,
+    "malicious":  1,
+    "bad":        1,
+})
+```
+
+### Split Data
+
+**80% training** (188.636+ sampel) / **20% testing** (47.159+ sampel) dengan `stratify=y` untuk menjaga proporsi kelas di kedua set.
 
 ---
 
@@ -315,10 +352,18 @@ mkdir -p model
 # Taruh phishing_model.pkl di folder model/
 ```
 
-**B. Training ulang dari dataset** *(butuh dataset dari Kaggle)*
+**B. Training ulang dari dataset** *(butuh dataset hybrid)*
 ```bash
 mkdir -p data model
-# Download dataset ke data/phishing_dataset.csv
+
+# 1. Download dataset utama dari Kaggle
+#    → simpan sebagai data/phishing_dataset.csv
+
+# 2. (Opsional) Tambahkan URL legitimate dari LLM atau kurasi manual
+#    → gabungkan ke data/phishing_dataset.csv dengan kolom URL dan label
+#    → format label: "legitimate" atau "phishing"
+
+# 3. Jalankan training
 python train_model.py
 ```
 
