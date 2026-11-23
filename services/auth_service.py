@@ -137,10 +137,7 @@ def update_password(new_password: str) -> tuple[bool, str]:
 
 
 def exchange_recovery_token(access_token: str, refresh_token: str) -> tuple[bool, str]:
-    """
-    Tukar token recovery dari URL email menjadi sesi aktif.
-    Dipanggil saat user klik link reset password dari email.
-    """
+    """Tukar token recovery (implicit flow) jadi sesi aktif."""
     try:
         res = get_client().auth.set_session(access_token, refresh_token)
         if res.user:
@@ -149,6 +146,18 @@ def exchange_recovery_token(access_token: str, refresh_token: str) -> tuple[bool
         return False, "Token tidak valid atau sudah kadaluarsa."
     except Exception as e:
         return False, f"Token error: {e}"
+
+
+def exchange_pkce_code(code: str) -> tuple[bool, str]:
+    """Tukar PKCE code (flow terbaru Supabase) jadi sesi aktif."""
+    try:
+        res = get_client().auth.exchange_code_for_session({"auth_code": code})
+        if res.user:
+            _set_session(res.user)
+            return True, "Code valid."
+        return False, "Code tidak valid atau sudah kadaluarsa."
+    except Exception as e:
+        return False, f"Code error: {e}"
 
 
 # ── Helper ─────────────────────────────────────────────────────────────────────

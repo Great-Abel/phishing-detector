@@ -50,38 +50,44 @@
   </div>
 
   <script>
-    // URL Streamlit app
     const STREAMLIT_URL = "https://phishing-detector-uas-ki.streamlit.app";
 
     (function () {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
+      const searchParams = new URLSearchParams(window.location.search);
+      const hashParams   = new URLSearchParams(window.location.hash.substring(1));
 
-      const accessToken  = params.get("access_token");
-      const refreshToken = params.get("refresh_token") || "";
-      const type         = params.get("type");
+      // ── PKCE flow: ?code=xxx (Supabase terbaru) ──
+      const code = searchParams.get("code");
+      if (code) {
+        const target = STREAMLIT_URL
+          + "?code=" + encodeURIComponent(code)
+          + "&type=recovery";
+        document.getElementById("status").textContent = "Mengalihkan ke halaman reset password...";
+        setTimeout(function () { window.location.replace(target); }, 800);
+        return;
+      }
+
+      // ── Implicit flow: #access_token=xxx (Supabase lama) ──
+      const accessToken  = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token") || "";
+      const type         = hashParams.get("type");
 
       if (type === "recovery" && accessToken) {
-        // Redirect ke Streamlit dengan token sebagai query params
         const target = STREAMLIT_URL
           + "?access_token=" + encodeURIComponent(accessToken)
           + "&refresh_token=" + encodeURIComponent(refreshToken)
           + "&type=recovery";
-
         document.getElementById("status").textContent = "Mengalihkan ke halaman reset password...";
-
-        setTimeout(function () {
-          window.location.replace(target);
-        }, 1000);
-
-      } else {
-        // Token tidak valid atau link bukan untuk recovery
-        document.getElementById("spinner").style.display = "none";
-        document.getElementById("status").textContent = "Link tidak valid atau sudah kadaluarsa.";
-        document.getElementById("error").style.display = "block";
-        document.getElementById("error").innerHTML =
-          'Silakan <a href="' + STREAMLIT_URL + '">kembali ke aplikasi</a> dan minta link baru.';
+        setTimeout(function () { window.location.replace(target); }, 800);
+        return;
       }
+
+      // ── Tidak ada token yang dikenali ──
+      document.getElementById("spinner").style.display = "none";
+      document.getElementById("status").textContent = "Link tidak valid atau sudah kadaluarsa.";
+      document.getElementById("error").style.display = "block";
+      document.getElementById("error").innerHTML =
+        'Silakan <a href="' + STREAMLIT_URL + '">kembali ke aplikasi</a> dan minta link baru.';
     })();
   </script>
 </body>

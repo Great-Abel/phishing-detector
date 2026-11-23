@@ -25,23 +25,24 @@ if missing:
     st.stop()
 
 # ── Recovery token check (dari link email reset password) ──────────────────────
-# Supabase kirim token di URL fragment (#access_token=...) bukan query params.
-# JS di bawah baca fragment dan redirect ke ?access_token=... supaya Streamlit bisa baca.
+# Supabase PKCE flow kirim ?code=xxx, implicit flow kirim #access_token=xxx
+# JS di bawah tangkap fragment (#) lalu redirect ke query params supaya Streamlit bisa baca.
 st.markdown("""
 <script>
 (function() {
     const hash = window.location.hash.substring(1);
     if (!hash) return;
-    const params = new URLSearchParams(hash);
-    const type = params.get("type");
-    const access_token = params.get("access_token");
+    const p = new URLSearchParams(hash);
+    const type = p.get("type");
+    const access_token = p.get("access_token");
     if (type === "recovery" && access_token) {
-        const refresh_token = params.get("refresh_token") || "";
-        const newUrl = window.location.pathname
+        const refresh_token = p.get("refresh_token") || "";
+        window.location.replace(
+            window.location.pathname
             + "?access_token=" + encodeURIComponent(access_token)
             + "&refresh_token=" + encodeURIComponent(refresh_token)
-            + "&type=recovery";
-        window.location.replace(newUrl);
+            + "&type=recovery"
+        );
     }
 })();
 </script>
@@ -51,9 +52,11 @@ params        = st.query_params
 access_token  = params.get("access_token", "")
 refresh_token = params.get("refresh_token", "")
 token_type    = params.get("type", "")
+pkce_code     = params.get("code", "")
 
-if token_type == "recovery" and access_token:
-    show_reset_page(access_token, refresh_token)
+# PKCE flow (?code=xxx&type=recovery) atau implicit flow (?access_token=xxx&type=recovery)
+if token_type == "recovery" and (access_token or pkce_code):
+    show_reset_page(access_token, refresh_token, pkce_code)
     st.stop()
 
 # ── Auth guard ─────────────────────────────────────────────────────────────────
