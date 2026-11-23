@@ -162,4 +162,4 @@ def render_audit_trail() -> None:
 </div>
 """, unsafe_allow_html=True)
 
-    st.caption(f"Menampilkan {len(trail)} riwayat terakhir milik akun kamu.")
+    st.caption(f"Menampilkan {len(trail)} riwayat terakhir milik pengguna Phishing Detector.")
