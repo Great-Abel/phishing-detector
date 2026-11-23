@@ -73,7 +73,7 @@ phishing-detector/
 ├── supabase_schema.sql         # SQL schema tabel audit_trail + RLS policies
 │
 ├── model/
-│   └── phishing_model.pkl      # Model terlatih — tidak di-push ke GitHub
+│   └── phishing_model.pkl      # Model terlatih 
 │
 ├── data/                       # Tidak di-push ke GitHub
 │   ├── phishing_dataset.csv    # Dataset training (dari Kaggle)
