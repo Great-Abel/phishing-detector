@@ -60,7 +60,14 @@ def render_hero() -> None:
 # ── Result card ────────────────────────────────────────────────────────────────
 
 def render_result(result: PredictionResult) -> None:
-    if result.prediction == "phishing":
+    # Badge khusus kalau domain masuk whitelist
+    if result.is_whitelisted:
+        st.markdown(
+            '<div class="result-legitimate">✅ URL ini terdeteksi sebagai <strong>LEGITIMATE</strong>'
+            ' &nbsp;<span style="font-size:0.75rem;opacity:0.8">🔖 Domain Terverifikasi</span></div>',
+            unsafe_allow_html=True,
+        )
+    elif result.prediction == "phishing":
         st.markdown(
             '<div class="result-phishing">⚠️ URL ini terdeteksi sebagai <strong>PHISHING</strong></div>',
             unsafe_allow_html=True,
